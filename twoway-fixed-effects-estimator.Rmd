@@ -1,0 +1,104 @@
+---
+title: "Consistency of Two-Way Fixed Effects (2FE) Estimator"
+output:
+    html_document:
+        highlight: pygments
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+knitr::opts_chunk$set(echo = TRUE, dev = "svg", fig.align = "center")
+```
+
+This document use Monte Carlo simulation to show the consistency of Two-Way Fixed Effects Estimator in balanced panel data.
+
+## DGP
+
+```{r}
+n_unit <- 5
+n_time <- 20
+
+eff_unit <- rep(rnorm(n_unit, -50, 10), n_time) # Draw unit fixed effect
+eff_time <- rep(rnorm(n_time, -10, 100), each = n_unit) # Draw time fixed effect
+
+X <- rnorm(n_unit * n_time, 0, 0.5) # Treatment
+coef <- 10 # Treatment effect
+cons <- 0 # Constant
+error <- rnorm(n_unit * n_time, 0, 10)
+
+Y <- cons + coef * X + eff_unit + eff_time + error
+```
+
+After our DGP, we can form a data frame like this:
+```{r}
+df <- data.frame(
+    Y = Y,
+    X = X,
+    unit = as.factor(rep(1:n_unit, n_time)),
+    time = as.factor(rep(1:n_time, each = n_unit))
+)
+
+df %>%
+    head(20) %>%
+    knitr::kable()
+```
+
+## Scatter plot
+
+Observing unconditional relationship between Y and X, there's hardly any correlation we can see directly:
+
+(The red line is the "real" relationship between X and Y, while blue line indicating fitted line)
+```{r, fig.width=4, fig.height=3, out.width="75%"}
+ggplot(df, aes(x = X, y = Y, shape = unit)) +
+    geom_point() +
+    geom_smooth(aes(shape = NULL, color = NULL), formula = y ~ x, method = "lm", se = FALSE) +
+    geom_abline(intercept = cons, slope = coef, color = "red")
+```
+
+## De-mean Procedure
+
+```{r}
+df_fe <- df %>%
+    group_by(time) %>%
+    mutate(Y_time = mean(Y), X_time = mean(X)) %>%
+    ungroup() %>%
+    group_by(unit) %>%
+    mutate(Y_unit = mean(Y), X_unit = mean(X)) %>%
+    ungroup() %>%
+    mutate(Y_hat = Y - Y_time - Y_unit + mean(Y), X_hat = X - X_time - X_unit + mean(X))
+
+
+plot(df_fe$X_hat, df_fe$Y_hat)
+points(X, cons + coef * X + error, col = 2)
+```
+
+Then estimate its slope:
+
+```{r}
+lm(Y_hat ~ -1 + X_hat, data = df_fe) %>% summary()
+```
+
+## Regression
+
+If we naively use OLS to estimate the treatment effect, we will get a biased estimator:
+```{r}
+lm(Y ~ X, data = df) %>% summary()
+```
+
+### One-way Fixed Effect
+
+And adding either unit or time fixed effects is not sufficient:
+
+```{r}
+lm(Y ~ X + unit, data = df) %>% summary()
+lm(Y ~ X + time, data = df) %>% summary()
+```
+
+### Two-way Fixed Effects
+
+Instead, we must include unit + time fixed effects to get an unbiased estimation of treatment effect which should be with slope = `r coef`
+
+```{r}
+lm(Y ~ X + unit + time, data = df) %>% summary()
+```
