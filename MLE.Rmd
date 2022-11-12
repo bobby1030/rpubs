@@ -1,0 +1,39 @@
+```{r}
+mu <- 5
+sigma <- 10
+N <- 10
+
+X <- rnorm(N, mu, sigma)
+
+
+LL <- function(pars, data) {
+    mu_hat <- pars[1]
+    sigma_hat <- pars[2]
+    -sum(log(dnorm(data, mu_hat, sigma_hat)))
+}
+
+optim(par = c(mu_hat = 4, sigma_hat = 9), fn = LL, data = X, control = list(parscale = c(mu_hat = 4, sigma_hat = 9)))
+```
+
+
+```{r}
+N <- 1:5000
+beta <- 0.68
+beta_hat <- array()
+
+for (n in N) {
+    X <- rnorm(n, 2, 5)
+    Y <- beta * X + rnorm(n, 0, 80)
+
+    LL <- function(beta_hat, X, Y) {
+        likelihood <- dnorm(Y - beta_hat * X, 0, 80)
+
+        return(-sum(log(likelihood)))
+    }
+
+    beta_hat[n] <- optim(par = 0, fn = LL, X = X, Y = Y)$par
+}
+
+plot(N, beta_hat, ylim = c(beta - 5, beta + 5), xlab = "Sample Size")
+abline(h = beta, col = "red")
+```
